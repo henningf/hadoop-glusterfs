@@ -1,0 +1,127 @@
+---
+- name: include variables
+  include_vars: Vagrant.yml
+
+# Password is hadoop
+- name: Add hadoop user
+  user: name=hadoop password=GEyBYPPaVdEgY
+
+- name: add ssh dir
+  file: path=/home/hadoop/.ssh state=directory owner=hadoop group=hadoop mode=0744
+
+- template: update node id_rsa
+    src=id_rsa.j2
+    dest=/home/hadoop/.ssh/id_rsa
+    owner=hadoop
+    group=hadoop
+    mode=0600
+
+- template: Add authorized_key to hadoop user
+    src=authorized_keys.j2
+    dest=/home/hadoop/.ssh/authorized_keys
+    owner=hadoop
+    group=hadoop
+    mode=0600
+
+- name: Install java {{ java_install_version }}
+  yum: name={{ java_install_version }} state=present
+
+- name: Install getfattr package
+  yum: name=attr state=present
+
+- stat: path=/opt/hadoop-{{ hadoop_version }}
+  register: hadoop_unzipped
+
+- name: Download hadoop
+  get_url:
+    url=http://www.eu.apache.org/dist/hadoop/common/hadoop-{{ hadoop_version }}/hadoop-{{ hadoop_version }}.tar.gz
+    dest=/tmp/hadoop-{{ hadoop_version }}.tar.gz
+  when: hadoop_unzipped.stat.exists == False
+
+# I would have used the link as the source, but it kept failing on me.
+- name: Untar hadoop
+  unarchive: src=/tmp/hadoop-{{ hadoop_version }}.tar.gz
+    dest=/opt
+    copy=no
+  when: hadoop_unzipped.stat.exists == False
+
+- name: Create symlink to /opt/hadoop
+  file: src=/opt/hadoop-{{ hadoop_version }}
+    dest=/opt/hadoop
+    state=link
+
+- name: Insert glusterfs-hadoop package
+  copy:
+    src=glusterfs-hadoop-2.3.13.jar
+    dest=/opt/hadoop-{{ hadoop_version }}/share/hadoop/common/glusterfs-hadoop-2.3.13.jar
+
+- name: Set ownership of hadoop directory
+  file: path=/opt/hadoop-{{ hadoop_version }}
+    state=directory
+    owner=hadoop
+    group=hadoop
+    recurse=yes
+
+- name: Set hadoop file executable
+  file: path={{ item.line }}
+    state=directory
+    recurse=yes
+    owner=hadoop
+    group=hadoop
+    mode=0775
+  with_items:
+    - { line: '/opt/hadoop/bin/' }
+    - { line: '/opt/hadoop/sbin/' }
+
+# Add entries to bashrc
+- name: Add entries to bashrc
+  lineinfile:
+    dest: /home/hadoop/.bashrc
+    state: present
+    regexp: "{{ item.regxp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { line: 'export HADOOP_HOME=/opt/hadoop', regxp: "export HADOOP_HOME=*" }
+    - { line: 'export JAVA_HOME={{ java_directory }}', regxp: "export JAVA_HOME=*" }
+    - { line: 'export HADOOP_MAPRED_HOME=$HADOOP_HOME', regxp: "export HADOOP_MAPRED_HOME=*" }
+    - { line: 'export HADOOP_COMMON_HOME=$HADOOP_HOME', regxp: "export HADOOP_COMMON_HOME=*" }
+    - { line: 'export HADOOP_HDFS_HOME=$HADOOP_HOME', regxp: "export HADOOP_HDFS_HOME=*" }
+    - { line: 'export YARN_HOME=$HADOOP_HOME', regxp: "export YARN_HOME=*" }
+    - { line: 'export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native', regxp: "export HADOOP_COMMON_LIB_NATIVE_DIR=*" }
+    - { line: 'export HADOOP_OPTS="-Djava.library.path=$HADOOP_HOME/lib/native"', regxp: "export HADOOP_OPTS=*"}
+    - { line: 'export HADOOP_YARN_HOME=$HADOOP_HOME', regxp: "HADOOP_YARN_HOME=*"}
+    - { line: 'export HADOOP_PREFIX=$HADOOP_HOME', regxp: "HADOOP_PREFIX=*"}
+    - { line: 'export PATH=$PATH:$HADOOP_HOME/sbin:$HADOOP_HOME/bin', regxp: "export PATH=*" }
+
+
+- name: Add entries to bashrc
+  lineinfile:
+    dest: /root/.bashrc
+    state: present
+    regexp: "{{ item.regxp }}"
+    line: "{{ item.line }}"
+  with_items:
+    - { line: 'export HADOOP_HOME=/opt/hadoop', regxp: "export HADOOP_HOME=*" }
+    - { line: 'export JAVA_HOME={{ java_directory }}', regxp: "export JAVA_HOME=*" }
+    - { line: 'export HADOOP_MAPRED_HOME=$HADOOP_HOME', regxp: "export HADOOP_MAPRED_HOME=*" }
+    - { line: 'export HADOOP_COMMON_HOME=$HADOOP_HOME', regxp: "export HADOOP_COMMON_HOME=*" }
+    - { line: 'export HADOOP_HDFS_HOME=$HADOOP_HOME', regxp: "export HADOOP_HDFS_HOME=*" }
+    - { line: 'export YARN_HOME=$HADOOP_HOME', regxp: "export YARN_HOME=*" }
+    - { line: 'export HADOOP_COMMON_LIB_NATIVE_DIR=$HADOOP_HOME/lib/native', regxp: "export HADOOP_COMMON_LIB_NATIVE_DIR=*" }
+    - { line: 'export HADOOP_OPTS="-Djava.library.path=$HADOOP_HOME/lib/native"', regxp: "export HADOOP_OPTS=*"}
+    - { line: 'export HADOOP_YARN_HOME=$HADOOP_HOME', regxp: "HADOOP_YARN_HOME=*"}
+    - { line: 'export HADOOP_PREFIX=$HADOOP_HOME', regxp: "HADOOP_PREFIX=*"}
+    - { line: 'export PATH=$PATH:$HADOOP_HOME/sbin:$HADOOP_HOME/bin', regxp: "export PATH=*" }
+
+
+- template: Setup hadoop core-site.xml defidently needs some tweaking
+    src=core-site.xml.j2
+    dest=/opt/hadoop/etc/hadoop/core-site.xml
+    owner=hadoop
+    group=hadoop
+
+- template: yarn-site config
+    src=yarn-site.xml.j2
+    dest=/opt/hadoop/etc/hadoop/yarn-site.xml
+    owner=hadoop
+    group=hadoop
