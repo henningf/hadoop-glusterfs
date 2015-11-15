@@ -14,13 +14,38 @@ Vagrant.configure(2) do |config|
   config.hostmanager.enabled = true
   config.hostmanager.manage_host = true
   config.hostmanager.include_offline = true
-  config.vm.box = "centos-7.1"
-  config.vm.box_url = "https://dl.fedoraproject.org/pub/alt/purpleidea/vagrant/centos-7.1/centos-7.1.box"
+  config.vm.box = "centos/7"
+  # NB! This will be overwritten by libcirt or virtualbox settings
+  gluster_install_disk = ""
+
+  # This is a workaround to get the vagrant provider
+  if ARGV[1] and \
+    (ARGV[1].split('=')[0] == "--provider" or ARGV[2])
+    provider = (ARGV[1].split('=')[1] || ARGV[2])
+  else
+    provider = (ENV['VAGRANT_DEFAULT_PROVIDER'] || :virtualbox).to_sym
+  end
+
+  # Sets gluster_install_disk based on provider
+  if "#{provider}" == "libvirt"
+    gluster_install_disk = "/dev/vdb"
+  elsif "#{provider}" == "virtualbox"
+    gluster_install_disk = "/dev/sdb"
+  else
+    raise Vagrant::Errors::VagrantError.new, "Error. provider not libvirt or virtualbox but #{provider}"
+  end
 
   config.vm.provider "libvirt" do |libvirt, override|
     libvirt.cpus = 2
     libvirt.memory = 2048
     libvirt.driver = 'kvm'
+  end
+
+  config.vm.provider :virtualbox do |vbox|
+    vbox.memory = 2048
+    vbox.cpus = 2
+    # Enable multiple guest CPUs if available
+    vbox.customize ["modifyvm", :id, "--ioapic", "on"]
   end
 
   num_hmaster_master.times do |n|
@@ -33,17 +58,28 @@ Vagrant.configure(2) do |config|
     end
   end
 
-
   num_hslave_nodes.times do |n|
 	  hslave_index = n+1
 	  config.vm.define "hslave#{hslave_index}" do |hslave_node|
 		  hslave_node.vm.hostname = "hslave#{hslave_index}.example.com"
 		  hslave_node.vm.network :private_network, ip: "192.168.100.#{200 + n}"
-      hslave_node.vm.network :forwarded_port, guest: 8443, host: 8443      
 		  # Add extra disk, for gluster
 		  hslave_node.vm.provider :libvirt do |libvirt|
 			  libvirt.storage :file, :size => '10G'
 		  end
+
+      hslave_node.vm.provider :virtualbox do |vb|
+          # Get disk path
+          line = `VBoxManage list systemproperties | grep "Default machine folder"`
+          vb_machine_folder = line.split(':')[1].strip()
+          second_disk = File.join(vb_machine_folder, hslave_node.vm.hostname, 'disk2.vdi')
+
+          # Create and attach disk
+          unless File.exist?(second_disk)
+            vb.customize ['createhd', '--filename', second_disk, '--format', 'VDI', '--size', 60 * 1024]
+          end
+          vb.customize ['storageattach', :id, '--storagectl', 'IDE Controller', '--port', 0, '--device', 1, '--type', 'hdd', '--medium', second_disk]
+        end
 
 		  # We only want to run ansible once
 		  if hslave_index == num_hslave_nodes
@@ -53,11 +89,10 @@ Vagrant.configure(2) do |config|
           ansible.groups = {
             "hslaves" => ["hslave1", "hslave2"],
             "hmasters" => ["hmaster"],
-            "hadoopmaster" => ["hmaster"],
             }
             ansible.extra_vars = {
               # This will tell ansible wich disk to use. This disk needs to be empty
-				      gluster_install_disk: "/dev/vdb",
+				      gluster_install_disk: gluster_install_disk,
 				      # Brick directory
 				      gluster_brick_directory: "/data/brick1",
               gluster_mount_directory: "/mnt/gv0",
