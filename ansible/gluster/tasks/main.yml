@@ -15,7 +15,7 @@
   register: epel_repo_present
 
 - name: Install gluster epel repo
-  shell: wget -P /etc/yum.repos.d/ http://download.gluster.org/pub/gluster/glusterfs/3.6/LATEST/CentOS/glusterfs-epel.repo
+  shell: curl -o /etc/yum.repos.d/glusterfs-epel.repo -OL http://download.gluster.org/pub/gluster/glusterfs/3.6/LATEST/CentOS/glusterfs-epel.repo
   when: epel_repo_present.stat.exists == False
 
 
