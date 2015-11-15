@@ -1,4 +1,7 @@
 ---
+- name: include variables
+  include_vars: vars.yml
+
 - name: This should only be run on Centos 6.x
   yum: name=xfsprogs-devel state=present
 
@@ -31,7 +34,7 @@
     name=gv0
     brick={{ gluster_brick_directory }}/gv0
     rebalance=yes
-    cluster="hslave1.example.com,hslave2.example.com"
+    cluster={{ hadoop_slaves_string }}
   run_once: true
 
 - name: start gluster volume

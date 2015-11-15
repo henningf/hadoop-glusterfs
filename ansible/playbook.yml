@@ -20,6 +20,3 @@
 - hosts: hmaster
   roles:
     - role: hadoop-master
-
-- hosts: os_CentOS
-  sudo: true

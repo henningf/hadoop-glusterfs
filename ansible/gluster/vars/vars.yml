@@ -1,0 +1,6 @@
+---
+hadoop_slaves_string: |
+  {% set colon = joiner(",") %}
+  {% for item in groups.hslaves -%}
+  {{ colon() }}{{ item }}.example.com
+  {%- endfor %}
