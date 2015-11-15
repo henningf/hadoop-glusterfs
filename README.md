@@ -8,8 +8,8 @@ This was made to test hadoop with glusterFS storage, the glusterFS plugin
 for Hadoop was built from:
 [GlusterFS Hadoop plugin](https://github.com/gluster/glusterfs-hadoop)
 
-NB! The Vagrant config file has been written for libvirt, it has
-not been testet against Virtualbox or other providers.
+NB! The Vagrant config file has been written for libvirt and Virtualbox it has
+not been testet against other providers.
 
 Running Hadoop as the hadoop user is still work in progress.
 
